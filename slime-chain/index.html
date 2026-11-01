@@ -395,7 +395,7 @@ function cleanupPeer(){
 function enterRoom(code){
   net.r={connected:()=>!!(net.peer&&net.peer.open&&!net.peer.disconnected)};
   Object.assign(net,{code,want:null,lastMy:null,lastOpp:null,gid:null,lastJson:""});
-  wins=[0,0];sendPresence(true);showLobby();
+  wins=[0,0];matchOver=false;roundNo=0;sendPresence(true);showLobby();
 }
 function showConnecting(msg){
   scr="connecting";card(`<h2>${msg}</h2><p>少し待ってね</p><button type="button" id="bk">やめる</button>`);
@@ -464,6 +464,8 @@ async function leaveRoom(){
 }
 
 /* ---------- 画面とゲーム進行 ---------- */
+const WIN_TARGET=2; // 何本先取か
+let matchOver=false,roundNo=0;
 let me=null,mode=null,scr="menu",playing=false,paused=false,readyT=0,elapsed=0,endT=0,result=null,wins=[0,0];
 let best=0;try{best=+localStorage.getItem("slimechain_best")||0;}catch(e){}
 function keepAwake(){try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{});}catch(e){}}
@@ -477,7 +479,7 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1101-f</span></div>`);
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1101-g</span></div>`);
   $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();
 }
 function showOnlineMenu(err){
@@ -502,17 +504,20 @@ function showJoin(err,code){
 function lobbyHtml(){
   const o=opp(),oWant=o&&o.presence&&o.presence.want,oReady=!!oWant&&oWant!==net.lastOpp,myReady=!!net.want&&net.want!==net.lastMy;
   const after=result!==null&&scr==="result";
-  const head=after?resultHead():`<h2>へや番号</h2><div class="code">${net.code}</div><p>相手にこの番号を教えてね</p>`;
+  const head=after?resultHead():`<h2>へや番号</h2><div class="code">${net.code}</div><p>相手にこの番号を教えてね<br>${WIN_TARGET}本先取で勝負!</p>`;
   const inv=(!after&&net.isHost&&!o)?`<button type="button" id="inv">招待リンクを送る</button>`:"";
   return `${head}
     <div class="players"><div>あなた<span class="st ${myReady?"on":"off"}">${myReady?"じゅんびOK":"まだ"}</span></div>
     <div>あいて<span class="st ${o?(oReady?"on":"off"):"off"}">${o?(oReady?"じゅんびOK":"入室中"):"まだ来ていません"}</span></div></div>
-    <button type="button" class="primary" id="rdy" ${myReady?"disabled":""}>${myReady?(o?"あいてを待っています…":"あいての入室を待っています…"):(after?"もういちど":"じゅんびOK")}</button>
+    <button type="button" class="primary" id="rdy" ${myReady?"disabled":""}>${myReady?(o?"あいてを待っています…":"あいての入室を待っています…"):(after?(matchOver?"新しい試合をはじめる":"つぎの1本へ"):"じゅんびOK")}</button>
     ${inv}<button type="button" id="lv">へやを出る</button>`;
 }
 function resultHead(){
   const t={win:["かち!","#ffd23f"],lose:["まけ…","#ff6b85"],draw:["ひきわけ","#fff"],left:["あいてが退出しました","#a9a9d6"]}[result]||["",""];
-  return `<h2 style="color:${t[1]};font-size:30px">${t[0]}</h2><p>せんせき ${wins[0]} - ${wins[1]} / さいだい ${me?me.maxChain:0}れんさ<br>へや ${net.code}</p>`;
+  if(matchOver){const w=wins[0]>=WIN_TARGET;
+    return `<h1>${w?"しょうり!":"はいぼく…"}</h1><p>${WIN_TARGET}本先取 <b style="color:var(--accent);font-size:20px">${wins[0]} - ${wins[1]}</b><br>${w?"おめでとう!":"つぎはがんばろう"} / へや ${net.code}</p>`;}
+  const rest=wins[0]===WIN_TARGET-1||wins[1]===WIN_TARGET-1?`<br>${wins[0]===WIN_TARGET-1&&wins[1]===WIN_TARGET-1?"つぎで決まる!":wins[0]===WIN_TARGET-1?"あと1本で勝ち!":"あいてがあと1本…"}`:"";
+  return `<h2 style="color:${t[1]};font-size:30px">${t[0]}</h2><p>${WIN_TARGET}本先取 ${wins[0]} - ${wins[1]}${rest}<br>さいだい ${me?me.maxChain:0}れんさ / へや ${net.code}</p>`;
 }
 let lobbyKey="";
 function showLobby(){scr="lobby";result=null;lobbyKey="";renderLobby();}
@@ -528,6 +533,8 @@ function renderLobby(){
 function startOnline(oppWant){
   net.lastMy=net.want;net.lastOpp=oppWant;
   net.gid=[net.want,oppWant].sort().join("-");
+  if(matchOver){wins=[0,0];matchOver=false;roundNo=0;}
+  roundNo++;
   seq=[];seqRng=mulberry(hashStr(net.gid));
   me=new Board();oppView=null;net.oppSeen=0;net.goneT=0;net.oppChain=0;
   mode="online";startCommon();sendPresence(true);
@@ -541,6 +548,7 @@ function startCommon(){
 function finishOnline(r){
   if(scr!=="play")return;
   result=r;playing=false;if(r==="win")wins[0]++;else if(r==="lose")wins[1]++;
+  if(wins[0]>=WIN_TARGET||wins[1]>=WIN_TARGET)matchOver=true;
   (r==="win"||r==="left"?SFX.win:SFX.lose)();
   setTimeout(()=>{if(scr!=="play"||result!==r)return;
     if(r==="left"){scr="result";card(`<h2>あいてが退出しました</h2><p>せんせき ${wins[0]} - ${wins[1]}</p>
@@ -570,6 +578,7 @@ $("menuBtn").onclick=()=>{
 };
 
 function bannerFor(){
+  if(readyT>0&&playing&&mode==="online"&&readyT>1150)return{text:roundNo+"本目",size:1.2,color:"#ffb84d"};
   if(readyT>0&&playing)return readyT>600?{text:"READY",size:1.1,color:"#fff"}:{text:"GO!",size:1.5,color:"#ffd23f"};
   if(mode==="online"&&result==="win")return{text:"かち!",size:1.6,color:"#ffd23f"};
   if(mode==="online"&&result==="lose")return{text:"まけ…",size:1.3,color:"#ff6b85"};
@@ -582,7 +591,7 @@ function updateStatus(){
   if(mode==="solo"&&me){st.textContent=`ハイスコア ${best}`;return;}
   if(net.r){const o=opp(),c=net.r.connected();
     st.innerHTML=`<span class="dot" style="background:${c?(o?"var(--ok)":"var(--accent)"):"var(--bad)"}"></span>へや ${net.code}・${!c?"つながっていません":o?"あいて接続中":"あいて待ち"}`;
-    $("wins").textContent=`${wins[0]} - ${wins[1]}`;return;}
+    $("wins").textContent=`${WIN_TARGET}本先取 ${wins[0]}-${wins[1]}`;return;}
   st.textContent="スライムチェイン";
 }
 
