@@ -17,6 +17,7 @@ html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
+#overlay,#top{touch-action:manipulation}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--font);
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
 #game{height:100%;display:flex;flex-direction:column}
@@ -320,6 +321,7 @@ function drawNext(b,cv){const ctx=ctxOf(cv);ctx.clearRect(0,0,CS*2.9,CS*2.8);
    ◀▶: 押しっぱなしで連続移動 / ▼: 押している間はやく落ちる / ⟲⟳: 回転 / ⤓: すぐ落とす */
 (function bindPad(){
   const REPEAT={L:1,R:1};
+  const MOVE_FIRST=260,MOVE_REPEAT=120; // 押しっぱなし: 連続移動が始まるまで / 1マスごとの間隔(ms)
   document.querySelectorAll("#pad button").forEach(b=>{
     const a=b.dataset.a;let timer=null,held=false;
     const fire=()=>{if(me&&playing&&!paused&&readyT<=0)me.queue.push(a);};
@@ -328,7 +330,7 @@ function drawNext(b,cv){const ctx=ctxOf(cv);ctx.clearRect(0,0,CS*2.9,CS*2.8);
       b.classList.add("on");
       if(a==="SOFT"){if(!held&&me){held=true;me.softCount++;}return;}
       fire();
-      if(REPEAT[a]){clearTimeout(timer);const rep=()=>{fire();timer=setTimeout(rep,55);};timer=setTimeout(rep,170);}
+      if(REPEAT[a]){clearTimeout(timer);const rep=()=>{fire();timer=setTimeout(rep,MOVE_REPEAT);};timer=setTimeout(rep,MOVE_FIRST);}
     });
     const up=()=>{b.classList.remove("on");clearTimeout(timer);timer=null;
       if(a==="SOFT"&&held){held=false;if(me)me.softCount=Math.max(0,me.softCount-1);}};
@@ -336,7 +338,18 @@ function drawNext(b,cv){const ctx=ctxOf(cv);ctx.clearRect(0,0,CS*2.9,CS*2.8);
     b.addEventListener("contextmenu",e=>e.preventDefault());
   });
 })();
-document.addEventListener("gesturestart",e=>e.preventDefault());
+/* ---------- ズーム・選択・スクロールを止める(iPhone対策) ----------
+   メニューの中とトップのボタン以外は、指で触っても画面が反応しないようにする */
+["gesturestart","gesturechange","gestureend"].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault(),{passive:false}));
+const inUi=t=>t&&t.closest&&t.closest("#overlay,#top");
+document.addEventListener("touchstart",e=>{if(e.touches.length>1||!inUi(e.target))e.preventDefault();},{passive:false});
+document.addEventListener("touchmove",e=>e.preventDefault(),{passive:false});
+let lastTouchEnd=0;
+document.addEventListener("touchend",e=>{const now=Date.now();
+  if(inUi(e.target))return;if(now-lastTouchEnd<350)e.preventDefault();lastTouchEnd=now;},{passive:false});
+document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false});
+document.addEventListener("contextmenu",e=>e.preventDefault());
+document.addEventListener("selectstart",e=>{if(!(e.target&&e.target.tagName==="INPUT"))e.preventDefault();});
 
 /* ---------- レイアウト ---------- */
 function layout(){
