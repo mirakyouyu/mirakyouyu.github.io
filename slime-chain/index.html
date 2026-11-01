@@ -111,6 +111,8 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--
 const COLS=6, ROWS=13, NCOL=4;
 let CS=30, MS=12;
 const OFF=[[0,-1],[1,0],[0,1],[-1,0]];
+/* 連鎖のテンポ(ms): 1マス落ちる時間 / 消えるまでの点滅時間 / 消えた後の間 */
+const GRAV_STEP=48,POP_TIME=700,AFTER_POP=220;
 const CHAIN_B=[0,6,14,28,50,80,110,140,170,200,230,260,290,320,350,380,410,440,470];
 const COLORS={1:{l:"#ffb3c0",m:"#ff4d6d",d:"#c21f43"},2:{l:"#b6ffd3",m:"#2fd77a",d:"#14904c"},
   3:{l:"#bfe0ff",m:"#4d9dff",d:"#1d5fc4"},4:{l:"#fff3b0",m:"#ffd23f",d:"#d19a00"},5:{l:"#f0f0f8",m:"#b8b8cc",d:"#7a7a90"}};
@@ -186,9 +188,9 @@ class Board{
     switch(this.state){
       case"spawn":this.t+=dt;if(this.t>=this.spawnDelay){this.t=0;this.spawn();}break;
       case"fall":this.updFall(dt);break;
-      case"grav":this.t+=dt;while(this.t>=22){this.t-=22;if(!this.gravStep()){this.t=0;this.afterGrav();break;}}break;
-      case"pop":this.t+=dt;if(this.t>=420){this.t=0;this.doPop();}break;
-      case"garb":this.t+=dt;while(this.t>=22){this.t-=22;const m=this.gravStep(),q=this.insertGarb();
+      case"grav":this.t+=dt;while(this.t>=GRAV_STEP){this.t-=GRAV_STEP;if(!this.gravStep()){this.t=0;this.afterGrav();break;}}break;
+      case"pop":this.t+=dt;if(this.t>=POP_TIME){this.t=0;this.doPop();}break;
+      case"garb":this.t+=dt;while(this.t>=GRAV_STEP){this.t-=GRAV_STEP;const m=this.gravStep(),q=this.insertGarb();
         if(!m&&!q){this.t=0;this.state="spawn";this.spawnDelay=120;SFX.garb();break;}}break;
     }
   }
@@ -234,7 +236,7 @@ class Board{
     removeGroups(this.g,gs);
     const bonus=Math.max(1,CHAIN_B[Math.min(this.chain-1,CHAIN_B.length-1)]+(cs.size-1)*3+gb);
     const pts=cleared*10*bonus;this.score+=pts;this.attack(pts);
-    this.popping=null;this.state="grav";this.t=-60;
+    this.popping=null;this.state="grav";this.t=-AFTER_POP;
   }
   attack(pts){this.carry+=pts;let n=Math.floor(this.carry/70);this.carry-=n*70;if(!n)return;
     const c=Math.min(n,this.pending);this.pending-=c;n-=c;this.sent+=n;}
@@ -280,7 +282,7 @@ function drawBoard(v,cv,cs,banner){
   for(let y=1;y<ROWS-1;y++){ctx.beginPath();ctx.moveTo(0,y*cs);ctx.lineTo(W,y*cs);ctx.stroke();}
   ctx.strokeStyle="#ff4d6d66";ctx.lineWidth=Math.max(1.5,cs/11);const mx=2*cs,m=cs*0.27;
   ctx.beginPath();ctx.moveTo(mx+m,m);ctx.lineTo(mx+cs-m,cs-m);ctx.moveTo(mx+cs-m,m);ctx.lineTo(mx+m,cs-m);ctx.stroke();
-  const g=v.g,pop=v.popSet,flash=pop&&Math.floor(v.popT/70)%2===0;
+  const g=v.g,pop=v.popSet,flash=pop&&Math.floor(v.popT/110)%2===0;
   for(let y=1;y<ROWS;y++)for(let x=0;x<COLS;x++){const c=g[y*COLS+x];if(!c||c===5)continue;
     const cx=(x+0.5)*cs,cy=(y-0.5)*cs;ctx.fillStyle=COLORS[c].m;
     if(x<COLS-1&&g[y*COLS+x+1]===c)ctx.fillRect(cx,cy-cs*0.28,cs,cs*0.56);
