@@ -578,7 +578,7 @@ function loop(now){
     if(readyT>0)readyT-=dt;
     else{
       elapsed+=dt;
-      me.fallInt=mode==="solo"?Math.max(120,650-elapsed/1000*3):Math.max(250,650-elapsed/1000*2);
+      me.fallInt=mode==="solo"?Math.max(220,900-elapsed/1000*2.5):Math.max(400,900-elapsed/1000*1.5);
       if(mode==="online"){
         if(o){net.goneT=0;readOpp(o);
           if(oppView&&oppView.sent>net.oppSeen){me.pending+=oppView.sent-net.oppSeen;net.oppSeen=oppView.sent;}}
