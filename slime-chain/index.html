@@ -17,6 +17,7 @@ html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
+#zone,#zone *,#pad,#pad *{touch-action:none}
 #overlay,#top{touch-action:manipulation}
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--font);
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
@@ -344,9 +345,17 @@ function drawNext(b,cv){const ctx=ctxOf(cv);ctx.clearRect(0,0,CS*2.9,CS*2.8);
 const inUi=t=>t&&t.closest&&t.closest("#overlay,#top");
 document.addEventListener("touchstart",e=>{if(e.touches.length>1||!inUi(e.target))e.preventDefault();},{passive:false});
 document.addEventListener("touchmove",e=>e.preventDefault(),{passive:false});
-let lastTouchEnd=0;
-document.addEventListener("touchend",e=>{const now=Date.now();
-  if(inUi(e.target))return;if(now-lastTouchEnd<350)e.preventDefault();lastTouchEnd=now;},{passive:false});
+let lastTouchEnd=0,lastTouchTarget=null;
+document.addEventListener("touchend",e=>{const now=Date.now(),t=e.target;
+  if(t&&t.tagName==="INPUT"){lastTouchEnd=now;lastTouchTarget=t;return;}
+  if(now-lastTouchEnd<400&&(!inUi(t)||t===lastTouchTarget))e.preventDefault();
+  lastTouchEnd=now;lastTouchTarget=t;},{passive:false});
+/* それでもズームされたら、すぐ元の倍率にもどす */
+const vpMeta=document.querySelector('meta[name="viewport"]');
+const VP="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover";
+function resetZoom(){if(!vpMeta)return;vpMeta.setAttribute("content",VP+",minimum-scale=1");setTimeout(()=>{vpMeta.setAttribute("content",VP);layout();},60);}
+if(window.visualViewport){visualViewport.addEventListener("resize",()=>{if(visualViewport.scale>1.01)resetZoom();else layout();});
+  setInterval(()=>{if(visualViewport.scale>1.01)resetZoom();},1000);}
 document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false});
 document.addEventListener("contextmenu",e=>e.preventDefault());
 document.addEventListener("selectstart",e=>{if(!(e.target&&e.target.tagName==="INPUT"))e.preventDefault();});
@@ -468,7 +477,7 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転</div>`);
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1101-f</span></div>`);
   $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();
 }
 function showOnlineMenu(err){
