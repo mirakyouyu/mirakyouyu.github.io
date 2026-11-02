@@ -157,15 +157,31 @@ function removeGroups(g,gs){
 /* ---------- サウンド・振動 ---------- */
 let AC=null,MG=null,soundOn=true;
 try{soundOn=localStorage.getItem("slimechain_sound")!=="off";}catch(e){}
-function initAudio(){try{
-  if(navigator.audioSession&&navigator.audioSession.type!=="playback")navigator.audioSession.type="playback";
-  if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();MG=AC.createGain();MG.gain.value=soundOn?1:0;MG.connect(AC.destination);
-    const b=AC.createBuffer(1,1,22050),src=AC.createBufferSource();src.buffer=b;src.connect(MG);src.start(0);}
-  if(AC.state!=="running")AC.resume().catch(()=>{});}catch(e){}}
+let unlockEl=null;
+function silentWav(){const n=4000,b=new ArrayBuffer(44+n),v=new DataView(b),w=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i));};
+  w(0,"RIFF");v.setUint32(4,36+n,true);w(8,"WAVEfmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,8000,true);v.setUint32(28,8000,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,"data");v.setUint32(40,n,true);
+  for(let i=0;i<n;i++)v.setUint8(44+i,128);return URL.createObjectURL(new Blob([b],{type:"audio/wav"}));}
+function initAudio(){
+  try{if(navigator.audioSession&&navigator.audioSession.type!=="playback")navigator.audioSession.type="playback";}catch(e){}
+  try{
+    // 古いiPhone向け: 無音の<audio>を流しておくとマナーモードでも鳴りやすくなる
+    if(!navigator.audioSession&&!unlockEl){unlockEl=new Audio(silentWav());unlockEl.loop=true;unlockEl.setAttribute("playsinline","");unlockEl.play().catch(()=>{unlockEl=null;});}
+  }catch(e){unlockEl=null;}
+  try{
+    if(!AC){const C=window.AudioContext||window.webkitAudioContext;if(!C)return;AC=new C();MG=AC.createGain();MG.gain.value=soundOn?1:0;MG.connect(AC.destination);
+      AC.onstatechange=updSnd;}
+    if(AC.state!=="running"){
+      const b=AC.createBuffer(1,1,22050),src=AC.createBufferSource();src.buffer=b;src.connect(AC.destination);src.start(0);
+      const r=AC.resume();if(r&&r.then)r.then(updSnd,updSnd);}
+  }catch(e){}
+  updSnd();}
+function updSnd(){const e=document.getElementById("sndState");if(!e)return;
+  e.textContent=!soundOn?"音:オフ":!AC?"音:画面をタップすると準備":AC.state==="running"?"音:OK":"音:準備中("+AC.state+")";}
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&AC)initAudio();});
-["pointerdown","touchend","click","keydown"].forEach(ev=>document.addEventListener(ev,initAudio,{capture:true,passive:true}));
+["pointerdown","pointerup","touchstart","touchend","mousedown","click","keydown"].forEach(ev=>document.addEventListener(ev,()=>{if(!AC||AC.state!=="running"||(!navigator.audioSession&&!unlockEl))initAudio();},{capture:true,passive:true}));
 function setSound(on){soundOn=on;try{localStorage.setItem("slimechain_sound",on?"on":"off");}catch(e){}
-  if(MG)MG.gain.value=on?1:0;const b=document.getElementById("sndBtn");if(b)b.textContent=on?"🔊":"🔇";}
+  if(MG)MG.gain.value=on?1:0;const b=document.getElementById("sndBtn");if(b)b.textContent=on?"🔊":"🔇";updSnd();}
 function tone(f,d=0.1,type="sine",vol=0.15,slide=0){if(!AC)return;const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
   o.type=type;o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(f*slide,t+d);
   g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+d);o.connect(g).connect(MG||AC.destination);o.start(t);o.stop(t+d);}
@@ -499,8 +515,8 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-f</span></div>`);
-  $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-g / <span id="sndState"></span></span></div>`);
+  $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();updSnd();
 }
 function showOnlineMenu(err){
   scr="online";
@@ -588,7 +604,7 @@ function togglePause(){
     $("rs").onclick=togglePause;$("mn").onclick=()=>{me=null;showMenu();};}
   else hideCard();
 }
-$("sndBtn").onclick=()=>{initAudio();setSound(!soundOn);};setSound(soundOn);
+$("sndBtn").onclick=()=>{initAudio();setSound(!soundOn);if(soundOn)SFX.join();};setSound(soundOn);
 $("pauseBtn").onclick=()=>{initAudio();togglePause();};
 $("menuBtn").onclick=()=>{
   if(mode==="solo"&&playing){if(!paused)togglePause();return;}
