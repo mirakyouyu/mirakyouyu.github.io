@@ -81,7 +81,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--
   <div id="top">
     <button id="menuBtn" type="button">メニュー</button>
     <span id="status"></span>
-    <button id="pauseBtn" type="button">⏸</button>
+    <span><button id="sndBtn" type="button">🔊</button> <button id="pauseBtn" type="button">⏸</button></span>
   </div>
   <div id="zone">
     <div class="col"><canvas id="t1"></canvas><canvas id="b1" class="board"></canvas></div>
@@ -153,16 +153,28 @@ function removeGroups(g,gs){
 }
 
 /* ---------- サウンド・振動 ---------- */
-let AC=null;
-function initAudio(){try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();}catch(e){}}
+let AC=null,MG=null,soundOn=true;
+try{soundOn=localStorage.getItem("slimechain_sound")!=="off";}catch(e){}
+function initAudio(){try{
+  if(navigator.audioSession&&navigator.audioSession.type!=="playback")navigator.audioSession.type="playback";
+  if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();MG=AC.createGain();MG.gain.value=soundOn?1:0;MG.connect(AC.destination);
+    const b=AC.createBuffer(1,1,22050),src=AC.createBufferSource();src.buffer=b;src.connect(MG);src.start(0);}
+  if(AC.state==="suspended")AC.resume();}catch(e){}}
+["pointerdown","touchend","click","keydown"].forEach(ev=>document.addEventListener(ev,initAudio,{capture:true,passive:true}));
+function setSound(on){soundOn=on;try{localStorage.setItem("slimechain_sound",on?"on":"off");}catch(e){}
+  if(MG)MG.gain.value=on?1:0;const b=document.getElementById("sndBtn");if(b)b.textContent=on?"🔊":"🔇";}
 function tone(f,d=0.1,type="sine",vol=0.15,slide=0){if(!AC)return;const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
   o.type=type;o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(f*slide,t+d);
-  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+d);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+d);}
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+d);o.connect(g).connect(MG||AC.destination);o.start(t);o.stop(t+d);}
 const buzz=ms=>{try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}};
 const SFX={
-  rot:()=>tone(880,0.04,"square",0.035),
-  move:()=>tone(520,0.02,"square",0.02),
-  lock:()=>tone(180,0.08,"triangle",0.1,0.6),
+  rot:()=>tone(880,0.05,"square",0.06),
+  move:()=>tone(520,0.03,"square",0.045),
+  lock:()=>tone(180,0.1,"triangle",0.2,0.6),
+  ready:()=>tone(660,0.12,"triangle",0.15),
+  go:()=>{tone(990,0.25,"triangle",0.2);tone(1320,0.25,"sine",0.1);},
+  send:n=>{tone(300,0.3,"sawtooth",0.09,3);setTimeout(()=>tone(600,0.2,"triangle",0.12,2),80);},
+  warn:()=>{tone(220,0.12,"square",0.07);setTimeout(()=>tone(220,0.12,"square",0.07),150);},
   pop:c=>{const f=330*Math.pow(1.122,c-1);tone(f,0.18,"triangle",0.18,1.5);setTimeout(()=>tone(f*1.5,0.15,"sine",0.12),60);buzz(20+c*10);},
   garb:()=>{tone(90,0.25,"sawtooth",0.1,0.5);buzz(80);},
   win:()=>[523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.2,"triangle",0.15),i*120)),
@@ -234,7 +246,7 @@ class Board{
     if(gs.length){this.chain++;this.popping={gs,set:new Set(gs.flatMap(x=>x.cells))};this.state="pop";this.t=0;SFX.pop(this.chain);
       const c=gs[0].cells[0];this.popups.push({text:this.chain+"れんさ!",x:(c%COLS+0.5),y:((c/COLS)|0)-1,t:0,big:this.chain>=3});}
     else{this.maxChain=Math.max(this.maxChain,this.chain);this.chain=0;
-      if(this.outbox>0){this.sent+=this.outbox;this.outbox=0;} // 連鎖が終わったらまとめて送る
+      if(this.outbox>0){this.sent+=this.outbox;this.outbox=0;if(this===me)SFX.send();} // 連鎖が終わったらまとめて送る
       this.startGarbage();}
   }
   doPop(){
@@ -484,7 +496,7 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-c</span></div>`);
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-d</span></div>`);
   $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();
 }
 function showOnlineMenu(err){
@@ -573,6 +585,7 @@ function togglePause(){
     $("rs").onclick=togglePause;$("mn").onclick=()=>{me=null;showMenu();};}
   else hideCard();
 }
+$("sndBtn").onclick=()=>{initAudio();setSound(!soundOn);};setSound(soundOn);
 $("pauseBtn").onclick=()=>{initAudio();togglePause();};
 $("menuBtn").onclick=()=>{
   if(mode==="solo"&&playing){if(!paused)togglePause();return;}
@@ -611,13 +624,14 @@ function loop(now){
     else renderLobby();
   }
   if(playing&&!paused){
-    if(readyT>0)readyT-=dt;
+    if(readyT>0){const pr=readyT;readyT-=dt;
+      if(pr>1100&&readyT<=1100)SFX.ready();if(pr>600&&readyT<=600)SFX.go();}
     else{
       elapsed+=dt;
       me.fallInt=mode==="solo"?Math.max(220,900-elapsed/1000*2.5):Math.max(400,900-elapsed/1000*1.5);
       if(mode==="online"){
         if(o){net.goneT=0;readOpp(o);
-          if(oppView&&oppView.sent>net.oppSeen){me.pending+=oppView.sent-net.oppSeen;net.oppSeen=oppView.sent;}}
+          if(oppView&&oppView.sent>net.oppSeen){me.pending+=oppView.sent-net.oppSeen;net.oppSeen=oppView.sent;SFX.warn();}}
         else{net.goneT+=dt;if(net.goneT>5000)finishOnline("left");}
       }
       if(playing)me.update(dt);
