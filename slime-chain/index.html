@@ -172,7 +172,7 @@ const SFX={
 /* ---------- ボード ---------- */
 class Board{
   constructor(){
-    this.g=new Int8Array(ROWS*COLS);this.seqI=0;this.score=0;this.pending=0;this.carry=0;this.sent=0;
+    this.g=new Int8Array(ROWS*COLS);this.seqI=0;this.score=0;this.pending=0;this.carry=0;this.sent=0;this.outbox=0;
     this.state="spawn";this.t=0;this.spawnDelay=0;this.chain=0;this.maxChain=0;this.piece=null;this.popping=null;
     this.popups=[];this.dead=false;this.gq=null;this.lastFail=0;this.fallInt=650;this.dropAcc=0;this.lockT=0;this.frac=0;
     this.queue=[];this.softCount=0;
@@ -230,7 +230,9 @@ class Board{
     const gs=findGroups(this.g);
     if(gs.length){this.chain++;this.popping={gs,set:new Set(gs.flatMap(x=>x.cells))};this.state="pop";this.t=0;SFX.pop(this.chain);
       const c=gs[0].cells[0];this.popups.push({text:this.chain+"れんさ!",x:(c%COLS+0.5),y:((c/COLS)|0)-1,t:0,big:this.chain>=3});}
-    else{this.maxChain=Math.max(this.maxChain,this.chain);this.chain=0;this.startGarbage();}
+    else{this.maxChain=Math.max(this.maxChain,this.chain);this.chain=0;
+      if(this.outbox>0){this.sent+=this.outbox;this.outbox=0;} // 連鎖が終わったらまとめて送る
+      this.startGarbage();}
   }
   doPop(){
     const gs=this.popping.gs;let cleared=0,gb=0;const cs=new Set();
@@ -241,7 +243,7 @@ class Board{
     this.popping=null;this.state="grav";this.t=-AFTER_POP;
   }
   attack(pts){this.carry+=pts;let n=Math.floor(this.carry/70);this.carry-=n*70;if(!n)return;
-    const c=Math.min(n,this.pending);this.pending-=c;n-=c;this.sent+=n;}
+    const c=Math.min(n,this.pending);this.pending-=c;n-=c;this.outbox+=n;} // 相殺の残りは連鎖が終わるまでためておく
   startGarbage(){
     if(this.pending>0){const n=Math.min(this.pending,30);this.pending-=n;
       const q=new Array(COLS).fill(Math.floor(n/6));const cols=[0,1,2,3,4,5].sort(()=>Math.random()-0.5).slice(0,n%6);
@@ -479,7 +481,7 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1101-g</span></div>`);
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-a</span></div>`);
   $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();
 }
 function showOnlineMenu(err){
