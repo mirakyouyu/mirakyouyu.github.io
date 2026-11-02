@@ -117,6 +117,7 @@ let CS=30, MS=12;
 const OFF=[[0,-1],[1,0],[0,1],[-1,0]];
 /* 連鎖のテンポ(ms): 1マス落ちる時間 / 消えるまでの点滅時間 / 消えた後の間 */
 const LOCK_RESET_MAX=15;
+const ROT_ANIM=180; // 回転の見た目のアニメーション時間(ms)
 const GRAV_STEP=65,POP_TIME=900,AFTER_POP=320;
 const CHAIN_B=[0,6,14,28,50,80,110,140,170,200,230,260,290,320,350,380,410,440,470];
 const COLORS={1:{l:"#ffb3c0",m:"#ff4d6d",d:"#c21f43"},2:{l:"#b6ffd3",m:"#2fd77a",d:"#14904c"},
@@ -247,8 +248,13 @@ class Board{
   /* 着地中に回転・移動したら、固定までの待ち時間をやり直す(1つのスライムにつき最大 LOCK_RESET_MAX 回) */
   bumpLock(){if(this.lockT>0&&this.lockResets<LOCK_RESET_MAX){this.lockT=0;this.lockResets++;}}
   rotate(dir){
-    const p=this.piece,nr=(p.r+dir+4)%4,[ox,oy]=OFF[nr];
-    const ok=()=>{SFX.rot();this.bumpLock();return true;};
+    const p=this.piece,nr=(p.r+dir+4)%4,[ox,oy]=OFF[nr],bx=p.x,by=p.y,br=p.r;
+    const ok=()=>{SFX.rot();this.bumpLock();
+      // 見た目だけ、くるっと回して動かす(判定はすぐ切り替わる)
+      const d=(p.r-br+4)%4,steps=d===2?2*dir:(d===1?1:-1),o=p.ra,now=performance.now();
+      let rem=0,rx=0,ry=0;if(o){const k=Math.min(1,(now-o.t0)/ROT_ANIM),r=Math.pow(1-k,2);rem=o.da*r;rx=o.dx*r;ry=o.dy*r;}
+      p.ra={t0:now,da:steps*Math.PI/2+rem,dx:bx-p.x+rx,dy:by-p.y+ry};
+      return true;};
     if(this.fits(p.x,p.y,nr)){p.r=nr;return ok();}
     if(this.fits(p.x-ox,p.y-oy,nr)){p.x-=ox;p.y-=oy;p.r=nr;return ok();}
     const now=performance.now();
@@ -337,10 +343,12 @@ function drawBoard(v,cv,cs,banner){
     let ga,gb;if(ox===0){const t=top(p.x);if(oy<0){ga=t;gb=t-1;}else{gb=t;ga=t-1;}}else{ga=top(p.x);gb=top(p.x+ox);}
     for(const[gx,gy,c]of[[p.x,ga,p.a],[p.x+ox,gb,p.b]])if(gy>=1&&COLORS[c]){ctx.fillStyle=COLORS[c].m;ctx.globalAlpha=0.5;
       ctx.beginPath();ctx.arc((gx+0.5)*cs,(gy-0.5)*cs,cs*0.14,0,7);ctx.fill();ctx.globalAlpha=1;}
-    const ay=(p.y+v.frac-0.5)*cs;
-    blob(ctx,cs,(p.x+ox+0.5)*cs,ay+oy*cs,p.b);
-    blob(ctx,cs,(p.x+0.5)*cs,ay,p.a);
-    if(cs>=16){ctx.strokeStyle="#ffffffaa";ctx.lineWidth=2;ctx.beginPath();ctx.arc((p.x+0.5)*cs,ay,cs*0.47,0,7);ctx.stroke();}}
+    let th=p.r*Math.PI/2,axo=0,ayo=0;
+    if(p.ra){const k=Math.min(1,(performance.now()-p.ra.t0)/ROT_ANIM),r=Math.pow(1-k,2);th-=p.ra.da*r;axo=p.ra.dx*r;ayo=p.ra.dy*r;if(k>=1)p.ra=null;}
+    const ax=(p.x+axo+0.5)*cs,ay=(p.y+ayo+v.frac-0.5)*cs;
+    blob(ctx,cs,ax+Math.sin(th)*cs,ay-Math.cos(th)*cs,p.b);
+    blob(ctx,cs,ax,ay,p.a);
+    if(cs>=16){ctx.strokeStyle="#ffffffaa";ctx.lineWidth=2;ctx.beginPath();ctx.arc(ax,ay,cs*0.47,0,7);ctx.stroke();}}
   for(const pp of v.popups){const k=pp.t/1300;ctx.globalAlpha=Math.max(0,1-k*k);
     const sz=Math.max(11,cs*(pp.big?0.95:0.7)),tx=Math.min(Math.max(pp.x*cs,W*0.3),W*0.7),ty=Math.max(pp.y*cs-k*cs*1.2,cs);
     bigText(ctx,pp.text,tx,ty,sz,pp.big?"#ffd23f":"#fff");ctx.globalAlpha=1;}
@@ -518,7 +526,7 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-i / <span id="sndState"></span></span></div>`);
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-j / <span id="sndState"></span></span></div>`);
   $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();updSnd();
 }
 function showOnlineMenu(err){
