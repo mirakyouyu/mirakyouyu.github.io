@@ -114,6 +114,7 @@ const COLS=6, ROWS=13, NCOL=4;
 let CS=30, MS=12;
 const OFF=[[0,-1],[1,0],[0,1],[-1,0]];
 /* 連鎖のテンポ(ms): 1マス落ちる時間 / 消えるまでの点滅時間 / 消えた後の間 */
+const LOCK_RESET_MAX=15;
 const GRAV_STEP=65,POP_TIME=900,AFTER_POP=320;
 const CHAIN_B=[0,6,14,28,50,80,110,140,170,200,230,260,290,320,350,380,410,440,470];
 const COLORS={1:{l:"#ffb3c0",m:"#ff4d6d",d:"#c21f43"},2:{l:"#b6ffd3",m:"#2fd77a",d:"#14904c"},
@@ -181,7 +182,7 @@ class Board{
   fits(x,y,r){const[o,p]=OFF[r];return this.get(x,y)===0&&this.get(x+o,y+p)===0;}
   spawn(){
     if(this.g[COLS+2]||!this.fits(2,1,0)){this.dead=true;this.piece=null;return;}
-    const[a,b]=pairAt(this.seqI++);this.piece={x:2,y:1,r:0,a,b};this.dropAcc=0;this.lockT=0;this.frac=0;this.state="fall";
+    const[a,b]=pairAt(this.seqI++);this.piece={x:2,y:1,r:0,a,b};this.dropAcc=0;this.lockT=0;this.lockResets=0;this.frac=0;this.state="fall";
   }
   update(dt){
     for(const p of this.popups)p.t+=dt;this.popups=this.popups.filter(p=>p.t<1300);
@@ -208,10 +209,12 @@ class Board{
     if(!this.fits(p.x,p.y+1,p.r)){this.frac=0;this.dropAcc=0;this.lockT+=dt;if(this.lockT>=(soft?40:450))this.lock();}
     else this.frac=Math.min(this.dropAcc/iv,0.99);
   }
-  move(d){const p=this.piece;if(this.fits(p.x+d,p.y,p.r)){p.x+=d;SFX.move();return true;}return false;}
+  move(d){const p=this.piece;if(this.fits(p.x+d,p.y,p.r)){p.x+=d;SFX.move();this.bumpLock();return true;}return false;}
+  /* 着地中に回転・移動したら、固定までの待ち時間をやり直す(1つのスライムにつき最大 LOCK_RESET_MAX 回) */
+  bumpLock(){if(this.lockT>0&&this.lockResets<LOCK_RESET_MAX){this.lockT=0;this.lockResets++;}}
   rotate(dir){
     const p=this.piece,nr=(p.r+dir+4)%4,[ox,oy]=OFF[nr];
-    const ok=()=>{SFX.rot();return true;};
+    const ok=()=>{SFX.rot();this.bumpLock();return true;};
     if(this.fits(p.x,p.y,nr)){p.r=nr;return ok();}
     if(this.fits(p.x-ox,p.y-oy,nr)){p.x-=ox;p.y-=oy;p.r=nr;return ok();}
     const now=performance.now();
@@ -481,7 +484,7 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-b</span></div>`);
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-c</span></div>`);
   $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();
 }
 function showOnlineMenu(err){
