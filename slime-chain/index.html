@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>スライムチェイン</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -25,6 +26,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--
 #top{height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;
   padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px));
   background:var(--panel);border-bottom:1px solid var(--line)}
+#sndBtn{position:relative;z-index:11}
 #top button{height:28px;min-width:48px;padding:0 12px;border:0;border-radius:14px;background:#ffffff1a;color:var(--fg);font:800 13px var(--font)}
 #status{font-size:12px;font-weight:800;color:var(--dim);text-align:center;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #status .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:1px}
@@ -159,7 +161,8 @@ function initAudio(){try{
   if(navigator.audioSession&&navigator.audioSession.type!=="playback")navigator.audioSession.type="playback";
   if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();MG=AC.createGain();MG.gain.value=soundOn?1:0;MG.connect(AC.destination);
     const b=AC.createBuffer(1,1,22050),src=AC.createBufferSource();src.buffer=b;src.connect(MG);src.start(0);}
-  if(AC.state==="suspended")AC.resume();}catch(e){}}
+  if(AC.state!=="running")AC.resume().catch(()=>{});}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&AC)initAudio();});
 ["pointerdown","touchend","click","keydown"].forEach(ev=>document.addEventListener(ev,initAudio,{capture:true,passive:true}));
 function setSound(on){soundOn=on;try{localStorage.setItem("slimechain_sound",on?"on":"off");}catch(e){}
   if(MG)MG.gain.value=on?1:0;const b=document.getElementById("sndBtn");if(b)b.textContent=on?"🔊":"🔇";}
@@ -496,7 +499,7 @@ function showMenu(){
    <button type="button" class="primary" id="goOnline" ${ok?"":"disabled"}><span>ふたりでたいせん</span>
      <small>${ok?"スマホ2台でへやに入って対戦":"通信の準備ができませんでした。電波を確認して開き直してね"}</small></button>
    <button type="button" id="goSolo"><span>ひとりでエンドレス</span><small>ハイスコア ${best}</small></button>
-   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-d</span></div>`);
+   <div class="howto"><b>◀ ▶</b> いどう(押しっぱなしで連続)<br><b>↺ ↻</b> 左回転 / 右回転<br><b>▼ はやく</b> 押している間はやくおとす<br>壁ぎわで回らない時は2回押すと半回転<br><span style="opacity:.6">ver 1102-f</span></div>`);
   $("goOnline").onclick=showOnlineMenu;$("goSolo").onclick=()=>startSolo();
 }
 function showOnlineMenu(err){
@@ -625,7 +628,7 @@ function loop(now){
   }
   if(playing&&!paused){
     if(readyT>0){const pr=readyT;readyT-=dt;
-      if(pr>1100&&readyT<=1100)SFX.ready();if(pr>600&&readyT<=600)SFX.go();}
+      if(pr>=2000&&mode!=="online"||pr>1150&&readyT<=1150&&mode==="online")SFX.ready();if(pr>600&&readyT<=600)SFX.go();}
     else{
       elapsed+=dt;
       me.fallInt=mode==="solo"?Math.max(220,900-elapsed/1000*2.5):Math.max(400,900-elapsed/1000*1.5);
